@@ -2,20 +2,39 @@ import { randomUUID } from "node:crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
+import express from "express";
 import * as z from "zod/v4";
 import { audit, auditPath, readAudit } from "./audit.js";
 import {
+  bindTrueForgeSession,
+  dataBackendInfo,
+  getTrueForgeSessionBinding,
+  listTrueForgeSessionBindings,
+} from "./db.js";
+import {
+  completeKycRemediationTasks,
   completeTask,
   createTask,
   dashboardSnapshot,
   draftSlackMessage,
+  getNotificationByToken,
   listAppointments,
+  listClientNotifications,
   listNews,
   listSlackDrafts,
   listTasks,
+  markNotificationSent,
+  queueKycExpiredNotification,
   scheduleAppointment,
 } from "./desk.js";
 import { evaluatePolicy, formatBlockBanner } from "./policy.js";
+import {
+  fetchHistory,
+  fetchQuote,
+  fetchQuotes,
+  liveMarketSnapshot,
+} from "./market.js";
+import { technicalAnalysis } from "./technical.js";
 import {
   defaultCustomerId,
   effectiveKycStatus,
@@ -41,12 +60,95 @@ function blocked(payload: unknown) {
   };
 }
 
-function resolveCustomerId(customer_id?: string) {
-  return customer_id || defaultCustomerId();
+function resolveCustomerId(customer_id?: string, session_id?: string) {
+  if (customer_id) return customer_id;
+  if (session_id) {
+    const binding = getTrueForgeSessionBinding(session_id);
+    if (binding) return binding.customer_id;
+  }
+  return defaultCustomerId();
 }
 
 function buildServer() {
   const server = new McpServer({ name: "finguard", version: "0.1.0" });
+
+  server.registerTool(
+    "get_data_backend",
+    {
+      description:
+        "Describe how FinGuard data integrates with TrueForge: SQLite system of record vs TrueForge session storage.",
+      inputSchema: {},
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async () => text(dataBackendInfo())
+  );
+
+  server.registerTool(
+    "bind_trueforge_session",
+    {
+      description:
+        "Bind a TrueForge session_id to a FinGuard customer_id so later tools can resolve the customer from the session.",
+      inputSchema: {
+        session_id: z.string(),
+        customer_id: z.string().optional(),
+        title: z.string().optional(),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: false,
+      },
+    },
+    async ({ session_id, customer_id, title }) => {
+      const id = customer_id || defaultCustomerId();
+      if (!getCustomer(id)) return blocked({ error: `Unknown customer ${id}` });
+      const binding = bindTrueForgeSession({
+        session_id,
+        customer_id: id,
+        title,
+      });
+      audit({
+        agent: "KycAgent",
+        action: "bind_trueforge_session",
+        customer_id: id,
+        decision: "ALLOW",
+        detail: binding,
+      });
+      return text({ binding, backend: dataBackendInfo() });
+    }
+  );
+
+  server.registerTool(
+    "get_trueforge_session_binding",
+    {
+      description:
+        "Look up which FinGuard customer is bound to a TrueForge session_id.",
+      inputSchema: { session_id: z.string() },
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async ({ session_id }) => {
+      const binding = getTrueForgeSessionBinding(session_id);
+      return text({
+        binding,
+        message: binding
+          ? `Session bound to ${binding.customer_id}`
+          : "No binding — call bind_trueforge_session or default to Jane.",
+      });
+    }
+  );
+
+  server.registerTool(
+    "list_trueforge_session_bindings",
+    {
+      description: "List recent TrueForge session → FinGuard customer bindings.",
+      inputSchema: {
+        limit: z.number().int().positive().max(50).optional(),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async ({ limit }) =>
+      text({ bindings: listTrueForgeSessionBindings(limit || 20) })
+  );
 
   server.registerTool(
     "list_customers",
@@ -73,12 +175,19 @@ function buildServer() {
       description:
         "KYC entry point. Returns verification checklist, expiration, missing fields, and allowed capabilities.",
       inputSchema: {
-        customer_id: z.string().optional().describe("Defaults to Jane Smith demo customer"),
+        customer_id: z
+          .string()
+          .optional()
+          .describe("Defaults to Jane Smith demo customer"),
+        session_id: z
+          .string()
+          .optional()
+          .describe("TrueForge session id — uses bound customer if set"),
       },
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
-    async ({ customer_id }) => {
-      const id = resolveCustomerId(customer_id);
+    async ({ customer_id, session_id }) => {
+      const id = resolveCustomerId(customer_id, session_id);
       const customer = getCustomer(id);
       if (!customer) return blocked({ error: `Unknown customer ${id}` });
       const status = effectiveKycStatus(customer);
@@ -201,26 +310,145 @@ function buildServer() {
     "get_market_snapshot",
     {
       description:
-        "Educational market context with explicit as-of dates (synthetic for demo; not live quotes).",
-      inputSchema: {},
-      annotations: { readOnlyHint: true, openWorldHint: false },
+        "Live market snapshot from Yahoo Finance (default: SPY, QQQ, IWM, TLT, GLD, BIL). Labels as-of timestamps.",
+      inputSchema: {
+        symbols: z
+          .array(z.string())
+          .optional()
+          .describe("Optional ticker list; defaults to major ETFs"),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: true },
     },
-    async () => {
-      const snapshot = {
-        as_of: "2026-09-19",
-        disclaimer: "Synthetic demo snapshot for hackathon — verify live data before any real advice.",
-        money_market_yield_approx: "4.2%",
-        spy_vs_200dma: "above",
-        qqq_vs_200dma: "above",
-        regime_note:
-          "Elevated cash yields reduce urgency of lump-sum deployment; DCA still reasonable for behavioral risk.",
-      };
+    async ({ symbols }) => {
+      const snapshot = await liveMarketSnapshot(symbols);
       audit({
         agent: "AdvisorAgent",
         action: "get_market_snapshot",
-        decision: "INFO",
+        decision: "ALLOW",
+        detail: { source: "yahoo_finance", count: snapshot.quotes.length },
       });
       return text(snapshot);
+    }
+  );
+
+  server.registerTool(
+    "yahoo_quote",
+    {
+      description:
+        "Get a live Yahoo Finance quote for one symbol (price, change, volume, 52w range).",
+      inputSchema: {
+        symbol: z.string().describe("Ticker e.g. AAPL, SPY, VTI"),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    async ({ symbol }) => {
+      try {
+        const quote = await fetchQuote(symbol);
+        audit({
+          agent: "AdvisorAgent",
+          action: "yahoo_quote",
+          decision: "ALLOW",
+          detail: { symbol: quote.symbol, price: quote.price },
+        });
+        return text({ quote });
+      } catch (e) {
+        return blocked({
+          error: e instanceof Error ? e.message : "yahoo_quote failed",
+          symbol,
+        });
+      }
+    }
+  );
+
+  server.registerTool(
+    "yahoo_quotes",
+    {
+      description: "Batch live Yahoo Finance quotes (max 20 symbols).",
+      inputSchema: {
+        symbols: z.array(z.string()).min(1).max(20),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    async ({ symbols }) => {
+      const quotes = await fetchQuotes(symbols);
+      audit({
+        agent: "AdvisorAgent",
+        action: "yahoo_quotes",
+        decision: "ALLOW",
+        detail: { count: quotes.length },
+      });
+      return text({ quotes, as_of: new Date().toISOString() });
+    }
+  );
+
+  server.registerTool(
+    "yahoo_history",
+    {
+      description:
+        "Daily Yahoo Finance history for a symbol (default last 30 calendar days).",
+      inputSchema: {
+        symbol: z.string(),
+        days: z.number().int().positive().max(365).optional(),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    async ({ symbol, days }) => {
+      try {
+        const history = await fetchHistory(symbol, days || 30);
+        audit({
+          agent: "AdvisorAgent",
+          action: "yahoo_history",
+          decision: "ALLOW",
+          detail: { symbol: history.symbol, bars: history.bars.length },
+        });
+        return text(history);
+      } catch (e) {
+        return blocked({
+          error: e instanceof Error ? e.message : "yahoo_history failed",
+          symbol,
+        });
+      }
+    }
+  );
+
+  server.registerTool(
+    "yahoo_technical_analysis",
+    {
+      description:
+        "Technical analysis from Yahoo Finance daily OHLC: SMA 20/50/200, EMA 12/26, RSI(14), MACD, Bollinger(20,2), ATR(14), trend + signal summary. Educational only.",
+      inputSchema: {
+        symbol: z.string().describe("Ticker e.g. AAPL, SPY, VTI"),
+        lookback_days: z
+          .number()
+          .int()
+          .positive()
+          .max(500)
+          .optional()
+          .describe("Calendar days of history to pull (default 260 for SMA200)"),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    async ({ symbol, lookback_days }) => {
+      try {
+        const analysis = await technicalAnalysis(symbol, lookback_days || 260);
+        audit({
+          agent: "AdvisorAgent",
+          action: "yahoo_technical_analysis",
+          decision: "ALLOW",
+          detail: {
+            symbol: analysis.symbol,
+            trend: analysis.trend,
+            rsi: analysis.indicators.rsi_14,
+          },
+        });
+        return text(analysis);
+      } catch (e) {
+        return blocked({
+          error:
+            e instanceof Error ? e.message : "yahoo_technical_analysis failed",
+          symbol,
+        });
+      }
     }
   );
 
@@ -444,6 +672,8 @@ function buildServer() {
         kyc_status: effectiveKycStatus(customer),
         kyc_expires_at: customer.kyc_expires_at,
         message: "KYC expired. Recommendations and trades should now BLOCK.",
+        next_step:
+          "Call notify_kyc_expired (NotificationAgent) to email the client a KYC renewal form, then queue_slack_update for the desk.",
       });
     }
   );
@@ -475,18 +705,21 @@ function buildServer() {
         investment_objective:
           getCustomer(id)!.investment_objective || "retirement_growth",
       });
+      const closed = completeKycRemediationTasks(id);
       audit({
         agent: "KycAgent",
         action: "simulate_kyc_verified",
         customer_id: id,
         decision: "INFO",
         reason: "Demo toggle: KYC verified",
+        detail: { remediation_tasks_closed: closed },
       });
       return text({
         customer_id: id,
         kyc_status: effectiveKycStatus(customer),
         kyc_expires_at: customer.kyc_expires_at,
         missing: missingKycFields(customer),
+        remediation_tasks_closed: closed,
         message: "KYC restored to VERIFIED.",
       });
     }
@@ -710,17 +943,230 @@ function buildServer() {
     async ({ limit }) => text({ drafts: listSlackDrafts(limit || 20) })
   );
 
+  server.registerTool(
+    "notify_kyc_expired",
+    {
+      description:
+        "NotificationAgent: email the client that KYC expired and include a secure renewal form link. Demo queues the email (approval-gated); does not send live SMTP.",
+      inputSchema: {
+        customer_id: z.string().optional(),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        openWorldHint: true,
+      },
+    },
+    async ({ customer_id }) => {
+      const id = resolveCustomerId(customer_id);
+      const customer = getCustomer(id);
+      if (!customer) return blocked({ error: `Unknown customer ${id}` });
+      const status = effectiveKycStatus(customer);
+      if (status !== "EXPIRED" && status !== "IN_PROGRESS" && status !== "FAILED") {
+        return blocked({
+          error: `KYC is ${status}; notify_kyc_expired is for expired/incomplete clients.`,
+          hint: "Call simulate_kyc_expiration first in the demo.",
+        });
+      }
+      const email =
+        customer.email ||
+        `${customer.name.toLowerCase().replace(/\s+/g, ".")}@example.com`;
+      const notification = queueKycExpiredNotification({
+        customer_id: id,
+        customer_name: customer.name,
+        email,
+        kyc_expires_at: customer.kyc_expires_at,
+        missing_fields: missingKycFields(customer),
+      });
+      markNotificationSent(notification.id);
+      audit({
+        agent: "NotificationAgent",
+        action: "notify_kyc_expired",
+        customer_id: id,
+        decision: "APPROVAL_REQUIRED",
+        reason: "Client email + KYC renewal form queued (demo send)",
+        detail: {
+          notification_id: notification.id,
+          to: notification.to,
+          form_url: notification.form_url,
+        },
+      });
+      return text({
+        notification,
+        form_preview: notification.form_url,
+        note: "Demo: email queued and marked sent after TrueForge approval. Open form_url to show the client renewal form.",
+      });
+    }
+  );
+
+  server.registerTool(
+    "list_client_notifications",
+    {
+      description: "NotificationAgent: list queued/sent client email notifications and form links.",
+      inputSchema: { limit: z.number().int().positive().max(50).optional() },
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async ({ limit }) => {
+      const notifications = listClientNotifications(limit || 20);
+      audit({
+        agent: "NotificationAgent",
+        action: "list_client_notifications",
+        decision: "ALLOW",
+        detail: { count: notifications.length },
+      });
+      return text({ notifications });
+    }
+  );
+
   return server;
 }
 
 const app = createMcpExpressApp();
+app.use(express.json({ limit: "1mb" }));
 
 app.get("/health", (_req, res) => {
-  res.json({ ok: true, service: "finguard", mcp: `http://127.0.0.1:${PORT}/mcp` });
+  res.json({
+    ok: true,
+    service: "finguard",
+    mcp: `http://127.0.0.1:${PORT}/mcp`,
+    data: dataBackendInfo(),
+  });
 });
 
 app.get("/dashboard", (_req, res) => {
   res.json({ data: dashboardSnapshot() });
+});
+
+app.get("/data-backend", (_req, res) => {
+  res.json({ data: dataBackendInfo() });
+});
+
+app.get("/market/quote/:symbol", async (req, res) => {
+  try {
+    const quote = await fetchQuote(req.params.symbol);
+    res.json({ data: quote });
+  } catch (e) {
+    res.status(502).json({
+      error: e instanceof Error ? e.message : "quote failed",
+    });
+  }
+});
+
+app.get("/market/snapshot", async (req, res) => {
+  try {
+    const raw = typeof req.query.symbols === "string" ? req.query.symbols : "";
+    const symbols = raw
+      ? raw.split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+    const snapshot = await liveMarketSnapshot(symbols);
+    res.json({ data: snapshot });
+  } catch (e) {
+    res.status(502).json({
+      error: e instanceof Error ? e.message : "snapshot failed",
+    });
+  }
+});
+
+app.get("/market/technical/:symbol", async (req, res) => {
+  try {
+    const days = Number(req.query.days || 260);
+    const analysis = await technicalAnalysis(
+      req.params.symbol,
+      Number.isFinite(days) ? days : 260
+    );
+    res.json({ data: analysis });
+  } catch (e) {
+    res.status(502).json({
+      error: e instanceof Error ? e.message : "technical analysis failed",
+    });
+  }
+});
+
+app.post("/sessions/bind", (req, res) => {
+  try {
+    const session_id = String(req.body?.session_id || "");
+    const customer_id = String(
+      req.body?.customer_id || defaultCustomerId()
+    );
+    const title =
+      typeof req.body?.title === "string" ? req.body.title : undefined;
+    if (!session_id) {
+      res.status(400).json({ error: "session_id required" });
+      return;
+    }
+    if (!getCustomer(customer_id)) {
+      res.status(404).json({ error: `Unknown customer ${customer_id}` });
+      return;
+    }
+    const binding = bindTrueForgeSession({ session_id, customer_id, title });
+    audit({
+      agent: "KycAgent",
+      action: "bind_trueforge_session_http",
+      customer_id,
+      decision: "ALLOW",
+      detail: binding,
+    });
+    res.json({ data: binding });
+  } catch (e) {
+    res.status(500).json({
+      error: e instanceof Error ? e.message : "bind failed",
+    });
+  }
+});
+
+app.get("/sessions/:sessionId", (req, res) => {
+  const binding = getTrueForgeSessionBinding(req.params.sessionId);
+  res.json({ data: binding });
+});
+
+app.get("/kyc-form/:token", (req, res) => {
+  const notification = getNotificationByToken(req.params.token);
+  if (!notification) {
+    res.status(404).type("html").send(`<!doctype html><html><body style="font-family:system-ui;padding:2rem">
+      <h1>Form not found</h1><p>This KYC renewal link is invalid or expired (demo).</p></body></html>`);
+    return;
+  }
+  res.type("html").send(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>FinGuard KYC renewal</title>
+  <style>
+    :root { color-scheme: light; --brand:#0b5c4a; --ink:#0c1f1a; --mist:#eef4f1; }
+    body { margin:0; font-family:"IBM Plex Sans", system-ui, sans-serif; background:linear-gradient(180deg,#f4f8f6,#e8efeb); color:var(--ink); }
+    main { max-width:34rem; margin:2.5rem auto; padding:1.5rem; background:#fff; border:1px solid rgba(11,92,74,.14); border-radius:14px; box-shadow:0 18px 40px rgba(7,61,51,.08); }
+    h1 { font-family:Georgia,serif; color:var(--brand); font-size:1.6rem; margin:0 0 .4rem; }
+    p { color:#2a453c; line-height:1.5; }
+    label { display:block; font-size:.8rem; font-weight:600; margin:1rem 0 .35rem; }
+    input, select { width:100%; box-sizing:border-box; padding:.7rem .8rem; border:1px solid rgba(11,92,74,.2); border-radius:10px; font:inherit; }
+    button { margin-top:1.25rem; width:100%; border:0; border-radius:10px; padding:.85rem 1rem; background:var(--brand); color:#f3faf7; font:inherit; font-weight:600; cursor:pointer; }
+    .meta { font-size:.75rem; color:#5d736a; margin-top:1rem; }
+    .badge { display:inline-block; padding:.2rem .5rem; border-radius:6px; background:var(--mist); color:var(--brand); font-size:.7rem; letter-spacing:.04em; text-transform:uppercase; }
+  </style>
+</head>
+<body>
+  <main>
+    <span class="badge">FinGuard · KYC renewal</span>
+    <h1>Re-verify ${notification.customer_name}</h1>
+    <p>Your KYC expired. Submit this form so advisory recommendations can resume. Demo only — no data is stored live.</p>
+    <form onsubmit="event.preventDefault(); this.querySelector('button').textContent='Submitted (demo)'; this.querySelector('button').disabled=true;">
+      <label>Legal name</label>
+      <input value="${notification.customer_name}" required />
+      <label>Email</label>
+      <input type="email" value="${notification.to}" required />
+      <label>Government ID type</label>
+      <select><option>Driver license</option><option>Passport</option><option>State ID</option></select>
+      <label>Annual income (approx)</label>
+      <input type="number" placeholder="185000" />
+      <label>Risk questionnaire</label>
+      <select><option>Moderate</option><option>Conservative</option><option>Aggressive</option></select>
+      <button type="submit">Submit KYC renewal</button>
+    </form>
+    <p class="meta">Token ${notification.form_token} · notification ${notification.id} · educational demo</p>
+  </main>
+</body>
+</html>`);
 });
 
 app.post("/mcp", async (req, res) => {

@@ -1,11 +1,4 @@
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-
-const DATA_PATH = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "../data/customers.json"
-);
+import { getDb } from "./db.js";
 
 export type KycStatus =
   | "NOT_STARTED"
@@ -18,6 +11,7 @@ export type KycStatus =
 export type Customer = {
   customer_id: string;
   name: string;
+  email?: string;
   dob: string;
   age: number;
   address: { line1: string; city: string; state: string; postal: string; verified: boolean };
@@ -58,27 +52,33 @@ export type Customer = {
   };
 };
 
-type Db = Record<string, Customer>;
-
-function load(): Db {
-  return JSON.parse(fs.readFileSync(DATA_PATH, "utf8")) as Db;
-}
-
-function save(db: Db): void {
-  fs.writeFileSync(DATA_PATH, JSON.stringify(db, null, 2) + "\n");
+function parseCustomer(raw: string): Customer {
+  return JSON.parse(raw) as Customer;
 }
 
 export function getCustomer(customerId: string): Customer | null {
-  const db = load();
-  return db[customerId] ?? null;
+  const row = getDb()
+    .prepare("SELECT data FROM customers WHERE customer_id = ?")
+    .get(customerId) as { data: string } | undefined;
+  return row ? parseCustomer(row.data) : null;
 }
 
-export function listCustomers(): Array<{ customer_id: string; name: string; kyc_status: KycStatus }> {
-  return Object.values(load()).map((c) => ({
-    customer_id: c.customer_id,
-    name: c.name,
-    kyc_status: effectiveKycStatus(c),
-  }));
+export function listCustomers(): Array<{
+  customer_id: string;
+  name: string;
+  kyc_status: KycStatus;
+}> {
+  const rows = getDb()
+    .prepare("SELECT customer_id, data FROM customers ORDER BY customer_id")
+    .all() as Array<{ customer_id: string; data: string }>;
+  return rows.map((r) => {
+    const c = parseCustomer(r.data);
+    return {
+      customer_id: c.customer_id,
+      name: c.name,
+      kyc_status: effectiveKycStatus(c),
+    };
+  });
 }
 
 export function effectiveKycStatus(c: Customer, now = new Date()): KycStatus {
@@ -104,12 +104,14 @@ export function missingKycFields(c: Customer): string[] {
 }
 
 export function updateCustomer(customerId: string, patch: Partial<Customer>): Customer {
-  const db = load();
-  const current = db[customerId];
+  const current = getCustomer(customerId);
   if (!current) throw new Error(`Unknown customer ${customerId}`);
   const next = { ...current, ...patch, customer_id: customerId };
-  db[customerId] = next;
-  save(db);
+  getDb()
+    .prepare(
+      "INSERT OR REPLACE INTO customers (customer_id, data, updated_at) VALUES (?, ?, ?)"
+    )
+    .run(customerId, JSON.stringify(next), new Date().toISOString());
   return next;
 }
 
@@ -120,7 +122,10 @@ export function setKycStatus(
 ): Customer {
   return updateCustomer(customerId, {
     kyc_status: status,
-    kyc_expires_at: expiresAt === undefined ? getCustomer(customerId)?.kyc_expires_at ?? null : expiresAt,
+    kyc_expires_at:
+      expiresAt === undefined
+        ? getCustomer(customerId)?.kyc_expires_at ?? null
+        : expiresAt,
   });
 }
 

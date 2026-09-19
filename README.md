@@ -1,129 +1,215 @@
-# Beat SPY Backtester
+# FinGuard — KYC-gated advisor on TrueForge
 
-## Agent Harness Hackathon (FinGuard)
+**TrueForge + FinGuard MCP (TypeScript) + SQLite + Yahoo Finance + React (Vite) SDK UI**
 
-KYC-aware financial advisor on TrueForge: see [`HACKATHON.md`](HACKATHON.md).
+FinGuard is a KYC-aware financial advisor built on the [TrueForge](https://trueforge.dev/quickstart) **Agent Harness**. One supervisor agent (`finguard-kyc-advisor`) calls **FinGuard MCP** tools for KYC, desk ops, live markets, recommendations, client notify, and audit — with **human Allow/Deny** on write actions.
 
-- MCP tools: [`finguard/`](finguard/)
-- Branded chat UI (TrueForge UI SDK): [`finguard-ui/`](finguard-ui/) → `npm run dev` → http://localhost:5173
+> Tagline: *From KYC verification to investment recommendation — every agent action is authorized, observable, and governed.*
 
-Takes a starting capital of $25,000 and backtests several well-known systematic
-strategies against buy-and-hold SPY, using real historical data from Yahoo Finance.
-
-## Strategies
-
-| Strategy | Rule |
+| | |
 |---|---|
-| SPY buy & hold | The benchmark. Buy SPY, never sell. |
-| 200-day SMA trend | Hold SPY while it closes above its 200-day moving average, otherwise sit in cash. |
-| Leveraged trend | Same signal, but hold SSO (2x daily SPY) when risk-on. |
-| Dual momentum | Monthly: hold SPY or QQQ, whichever has the better trailing 12-month return; if that return is negative, hold TLT (long bonds) instead. |
+| **Repo** | https://github.com/cottonandcolor/stocktrading |
+| **PR** | [#1](https://github.com/cottonandcolor/stocktrading/pull/1) |
+| **Hackathon notes** | [`HACKATHON.md`](HACKATHON.md) |
+| **Demo slides** | [`finguard-ui/public/demo-slides.html`](finguard-ui/public/demo-slides.html) → `/demo-slides.html` when UI is running |
 
-Signals are lagged one day (no look-ahead), dividends are reinvested
-(adjusted prices), and a per-trade cost (default 5 bps) is charged on turnover.
+---
 
-## Setup
+## How TrueForge (agent harness) and MCP work together
 
-```bash
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
+```
+┌─────────────────────┐     sessions / turns / SSE      ┌──────────────────────┐
+│  FinGuard UI :5173  │◄────────────────────────────────►│  TrueForge :8790      │
+│  TrueForge SDK      │     Allow / Deny approvals       │  finguard-kyc-advisor │
+└─────────┬───────────┘                                  └──────────┬───────────┘
+          │ bind session → customer                     MCP connector│
+          ▼                                                          ▼
+┌─────────────────────┐     Streamable HTTP MCP          ┌──────────────────────┐
+│  Desk REST proxy    │◄────────────────────────────────►│  FinGuard MCP :8765   │
+│  /finguard/*        │                                  │  tools + policy       │
+└─────────────────────┘                                  └──────────┬───────────┘
+                                                                    │
+                         ┌──────────────────────────────────────────┼──────────┐
+                         ▼                                          ▼          ▼
+                   SQLite SoR                              Yahoo Finance    Audit log
+              (KYC, desk, notify,                      (quotes, history,   (JSONL / DB)
+               session bindings)                            technicals)
 ```
 
-## Run
+| Layer | Role |
+|--------|------|
+| **TrueForge** | Agent harness: sessions, streaming turns, tool-call **approvals**, agent instructions, MCP connector wiring |
+| **FinGuard MCP** | System of record + tools: KYC policy, advisor desk, notifications, Slack queue, Yahoo live data, audit |
+| **FinGuard UI** | Advisor **day path** (Brief → Compliance → Research → Advise → Act), live desk, sticky Allow/Deny |
+
+**Rule of thumb:** TrueForge **orchestrates**; FinGuard MCP **executes** and holds ground truth. The agent must not invent KYC status or prices — it calls tools.
+
+---
+
+## Architecture pieces
+
+| Path | What it is |
+|------|------------|
+| [`finguard/`](finguard/) | MCP server (`npm run start` → `http://127.0.0.1:8765/mcp`) |
+| [`finguard/agent-instructions.md`](finguard/agent-instructions.md) | Supervisor prompt pasted into TrueForge |
+| [`finguard/src/server.ts`](finguard/src/server.ts) | MCP tool registration + Express (`/dashboard`, `/market/*`, `/sessions/bind`) |
+| [`finguard/src/policy.ts`](finguard/src/policy.ts) | KYC → capability matrix (ALLOW / LIMIT / BLOCK) |
+| [`finguard/src/db.ts`](finguard/src/db.ts) | SQLite SoR + TrueForge `session_id → customer_id` bindings |
+| [`finguard/src/market.ts`](finguard/src/market.ts) / [`technical.ts`](finguard/src/technical.ts) | Yahoo quotes + SMA/RSI/MACD/Bollinger |
+| [`finguard-ui/`](finguard-ui/) | React + `@truefoundry/trueforge-sdk` branded workspace |
+
+---
+
+## Agent coordination (roles)
+
+TrueForge runs **one** agent. “Sub-agents” are **roles** stamped on MCP tool calls and the audit log. The supervisor sequences them:
+
+| Role | Responsibility | Example MCP tools |
+|------|----------------|-------------------|
+| **KycAgent** | Identity & suitability gate | `check_kyc_status`, `simulate_kyc_expiration`, `simulate_kyc_verified` |
+| **DeskAgent** | News, tasks, appointments, Slack queue | `get_advisor_dashboard`, `create_advisor_task`, `schedule_appointment`, `queue_slack_update` |
+| **MarketData** | Live Yahoo Finance | `yahoo_quote`, `yahoo_quotes`, `yahoo_history`, `yahoo_technical_analysis`, `get_market_snapshot` |
+| **AdvisorAgent** | Portfolio analysis & recommendations | `analyze_portfolio`, `generate_recommendation` |
+| **ComplianceAgent** | Policy + paper actions | `run_compliance_check`, `propose_paper_action` |
+| **NotificationAgent** | Client email + KYC renewal form | `notify_kyc_expired`, `list_client_notifications` |
+
+**Hard rules (enforced in tools + instructions):**
+
+- Always `check_kyc_status` before `generate_recommendation` or `propose_paper_action`
+- Expired / incomplete KYC → **ACTION BLOCKED** (no invented verification)
+- Write tools pause in TrueForge for **human Allow/Deny**
+- Cite Yahoo `as_of` timestamps; never invent prices
+- Paper / educational only — no live brokerage
+
+### KYC → capability
+
+| KYC status | Portfolio analysis | Recommendation | Paper trade |
+|---|---|---|---|
+| NOT_STARTED / FAILED | Block | Block | Block |
+| IN_PROGRESS / EXPIRED | Limited | Block | Block |
+| VERIFIED | Allow | Allow | Approval required |
+| MANUAL_REVIEW | Block | Block | Block |
+
+---
+
+## MCP tool catalog
+
+**KYC:** `list_customers`, `check_kyc_status`, `check_customer_profile`, `simulate_kyc_expiration`, `simulate_kyc_verified`, `simulate_incomplete_income`  
+
+**Advice:** `analyze_portfolio`, `get_market_snapshot`, `generate_recommendation`, `propose_paper_action`  
+
+**Compliance:** `run_compliance_check`  
+
+**Desk:** `get_advisor_dashboard`, `list_market_news`, `create_advisor_task`, `schedule_appointment`, `queue_slack_update`, `list_slack_queue`  
+
+**Notify:** `notify_kyc_expired`, `list_client_notifications`  
+
+**Data / integration:** `get_data_backend`, `bind_trueforge_session`, `get_trueforge_session_binding`, `list_trueforge_session_bindings`, `get_audit_log`  
+
+**Yahoo live:** `yahoo_quote`, `yahoo_quotes`, `yahoo_history`, `yahoo_technical_analysis`
+
+---
+
+## Advisor day path (UI narrative)
+
+The branded UI walks a 2-minute advisor journey:
+
+1. **Brief** — Open Jane’s book (`get_advisor_dashboard`, `check_kyc_status`)
+2. **Compliance** — Expire KYC → block advice → email form + Slack + high-priority task
+3. **Research** — Live quotes / technicals (Yahoo MCP)
+4. **Advise** — Portfolio plan + Slack summary (**Allow** gated tools)
+5. **Act** — Restore KYC → paper VTI → Zoom appointment (**Allow**)
+
+Demo customer: `cust_jane_001` (Jane Smith).
+
+**What’s live vs demo side-effect**
+
+| Live / persistent | Demo side effects |
+|-------------------|-------------------|
+| Yahoo quotes & technical analysis | Email: queued / `approved_sent_demo` (no live SMTP) |
+| FinGuard SQLite (KYC, desk, audit, bindings) | Slack: `queued_for_slack_mcp` until Slack MCP is attached |
+| TrueForge sessions & approvals | Paper trade: simulated fill, no broker |
+| Real MCP tool invocations | Market news: curated demo wire |
+
+---
+
+## Quick start
+
+**Prerequisites:** Node.js **22.14+**, an LLM API key for TrueForge.
+
+### 1. TrueForge harness
 
 ```bash
-.venv/bin/python beat_spy.py                    # defaults: $25k from 2007
-.venv/bin/python beat_spy.py --start 2015-01-01 --capital 25000 --cost-bps 10
+npx @truefoundry/trueforge@latest
 ```
 
-Prints a comparison table (final value, CAGR, max drawdown, Sharpe, trades)
-and saves an equity-curve chart to `results.png`.
+Open [http://localhost:8790](http://localhost:8790) → **Settings → Models** (API key) → **Connectors → Add MCP Server**:
 
-## Weekly options analyzer
+| Field | Value |
+|--------|--------|
+| Name | `finguard` |
+| URL | `http://127.0.0.1:8765/mcp` |
+| Auth | none |
 
-`options_friday.py` pulls a live option chain and shows what a given expiry is
-actually pricing, in three views:
+Agent `finguard-kyc-advisor`: attach the `finguard` MCP; paste [`finguard/agent-instructions.md`](finguard/agent-instructions.md); keep write tools approval-gated.
+
+### 2. FinGuard MCP
 
 ```bash
-.venv/bin/python options_friday.py --view buy --max-premium 0.60   # cost of "cheap" long options
-.venv/bin/python options_friday.py --view credit --width 5         # defined-risk credit spreads
-.venv/bin/python options_friday.py --view csp --cash 80000         # cash-secured puts
+cd finguard
+npm install
+npm run start
 ```
 
-The `buy` view is the useful one for sanity-checking a hunch: for every
-out-of-the-money strike it reports the move required, the market-implied
-probability of profit, and the share of your premium consumed by the bid-ask
-spread on entry.
+- MCP: `http://127.0.0.1:8765/mcp`
+- Health: http://127.0.0.1:8765/health  
+- Dashboard: http://127.0.0.1:8765/dashboard  
+- Data backend: http://127.0.0.1:8765/data-backend  
+- Markets: `GET /market/quote/AAPL`, `/market/snapshot`, `/market/technical/SPY`
 
-## Local paper trading platform
+SQLite file: `finguard/data/finguard.sqlite` (gitignored). UI binds each new TrueForge session to Jane via `POST /sessions/bind`.
 
-Browser dashboard with a persistent $25,000 paper account, stock tickets,
-defined-risk debit spreads, opening-range strategy scanner, and risk lockouts.
+### 3. FinGuard UI
 
 ```bash
-.venv/bin/streamlit run paper_platform.py
+cd finguard-ui
+npm install
+npm run dev
 ```
 
-Opens at `http://localhost:8501`. State is stored in `paper_platform.db`.
-Nothing is sent to a broker.
+Open [http://localhost:5173](http://localhost:5173). Vite proxies `/api` → TrueForge `:8790` and `/finguard` → MCP `:8765`.
 
-### Monday morning auto-launch
+Demo slides: [http://127.0.0.1:5173/demo-slides.html](http://127.0.0.1:5173/demo-slides.html) (←/→ to navigate).
 
-`monday_morning.sh` starts the dashboard, opens the browser, and opens an
-interactive Terminal running `day_trader.py --live` so you can type `YES` on
-READY signals.
+### Optional: Slack MCP
 
-```bash
-./monday_morning.sh          # run now
-atq                          # list scheduled jobs
-atrm 1                       # cancel job id 1
-```
+In TrueForge **Settings → Connectors**, add Slack MCP and attach it to `finguard-kyc-advisor` alongside `finguard`. Without OAuth, drafts still show on the desk **Slack queue**.
 
-## Approval-based paper day trader
+---
 
-`day_trader.py` automates the Monday watchlist as a local paper simulation. It
-never connects to a brokerage or places a real order.
+## Data ownership
 
-```bash
-# Start before 9:20 a.m. Eastern and leave it running through the session.
-.venv/bin/python day_trader.py --live
+| Store | Owns |
+|--------|------|
+| **TrueForge** (local SQLite/Postgres) | Sessions, turns, streaming events, approvals |
+| **FinGuard SQLite** | Customers / KYC, desk (news, tasks, appointments), notifications, Slack drafts, audit, `session_id → customer_id` |
+| **Yahoo Finance** | Live quotes, history, technical indicators |
 
-# Inspect one scan without accepting a paper trade.
-.venv/bin/python day_trader.py --once --reject
+---
 
-# Run deterministic tests for signals, sizing, daily limits, and exits.
-.venv/bin/python -m unittest -v test_day_trader.py
-```
+## Pre-existing research tools (same repo)
 
-The scanner:
+This repository also contains earlier local paper-trading / backtest utilities (not the hackathon harness layer):
 
-- waits until 9:45 a.m. Eastern and calculates the first 15-minute range;
-- requires a breakout, a later retest, VWAP confirmation, QQQ confirmation,
-  and at least 1.5x cumulative relative volume;
-- asks for an explicit `YES` before opening a simulated position;
-- risks at most $62.50 per trade, limits notional value to 25% of the $25,000
-  paper sleeve, allows two trades, and locks after a $125 realized daily loss;
-- takes half off at 1R, moves the stop to breakeven, targets 2R, and closes
-  remaining positions at 3:50 p.m. Eastern;
-- writes its local state to `paper_trades.json`.
+- `beat_spy.py` — systematic strategies vs SPY  
+- `paper_platform.py` — Streamlit paper desk  
+- `day_trader.py` — approval-based local day-trade sim  
+- `options_friday.py` — weekly options views  
 
-Yahoo one-minute quotes may be delayed and do not provide a reliable live
-bid-ask spread. Before approving a paper signal, verify in the brokerage that
-the spread is no more than 0.15% of the share price. The watchlist catalysts
-are also entered manually and must be revalidated before each new session.
+See script docstrings / prior README sections in git history for details. **FinGuard is the Agent Harness submission.**
 
-Reusable expert scan prompts:
-
-- Equity day trades: [`prompts/day_trade_scan.md`](prompts/day_trade_scan.md)
-- Short-term options: [`prompts/short_term_options.md`](prompts/short_term_options.md)
-- Two-agent day trade: [`prompts/dual_agent_winning_trade.md`](prompts/dual_agent_winning_trade.md)
-- Two-agent beat SPY: [`prompts/dual_agent_beat_spy.md`](prompts/dual_agent_beat_spy.md)
-- Two-agent buy signals: [`prompts/dual_agent_buy_signals.md`](prompts/dual_agent_buy_signals.md)
-- Two-agent finance + math buys: [`prompts/dual_agent_finance_math_buys.md`](prompts/dual_agent_finance_math_buys.md)
-- Two-agent weekly options: [`prompts/dual_agent_weekly_options.md`](prompts/dual_agent_weekly_options.md)
+---
 
 ## Disclaimer
 
-Past performance does not predict future results. This is a research /
-educational tool, not investment advice. Backtested strategies often look
-better than they perform live (overfitting, regime change, slippage).
+Synthetic customer data for a hackathon / educational demo. Not licensed financial, tax, or legal advice. No live brokerage connectivity. Past or simulated performance does not predict future results.

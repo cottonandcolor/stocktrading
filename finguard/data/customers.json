@@ -2,6 +2,7 @@
   "cust_jane_001": {
     "customer_id": "cust_jane_001",
     "name": "Jane Smith",
+    "email": "jane.smith@example.com",
     "dob": "1968-05-12",
     "age": 57,
     "address": {
@@ -41,24 +42,65 @@
       "past_behavior": "held through 2022 drawdown"
     },
     "emergency_fund_months": 6,
-    "kyc_status": "VERIFIED",
-    "kyc_expires_at": "2027-04-15T00:00:00-07:00",
-    "restricted_products": ["leveraged_etf_long_term", "penny_stocks"],
+    "kyc_status": "EXPIRED",
+    "kyc_expires_at": "2026-09-18T19:21:57.808Z",
+    "restricted_products": [
+      "leveraged_etf_long_term",
+      "penny_stocks"
+    ],
     "portfolio": {
       "account_type": "taxable_brokerage",
       "as_of": "2026-08-05",
       "total": 175667,
       "cash": 158590,
       "holdings": [
-        { "symbol": "SWVXX", "name": "money market", "value": 107811, "shares": null },
-        { "symbol": "CASH", "name": "sweep", "value": 50779, "shares": null },
-        { "symbol": "JEPI", "value": 5748, "shares": 100 },
-        { "symbol": "IGV", "value": 4065, "shares": 40 },
-        { "symbol": "GOOGL", "value": 3624, "shares": 10 },
-        { "symbol": "META", "value": 1762, "shares": 3 },
-        { "symbol": "TSLA", "value": 1612, "shares": 5 },
-        { "symbol": "BITX", "value": 62, "shares": null },
-        { "symbol": "BILL", "value": 97, "shares": 2 }
+        {
+          "symbol": "SWVXX",
+          "name": "money market",
+          "value": 107811,
+          "shares": null
+        },
+        {
+          "symbol": "CASH",
+          "name": "sweep",
+          "value": 50779,
+          "shares": null
+        },
+        {
+          "symbol": "JEPI",
+          "value": 5748,
+          "shares": 100
+        },
+        {
+          "symbol": "IGV",
+          "value": 4065,
+          "shares": 40
+        },
+        {
+          "symbol": "GOOGL",
+          "value": 3624,
+          "shares": 10
+        },
+        {
+          "symbol": "META",
+          "value": 1762,
+          "shares": 3
+        },
+        {
+          "symbol": "TSLA",
+          "value": 1612,
+          "shares": 5
+        },
+        {
+          "symbol": "BITX",
+          "value": 62,
+          "shares": null
+        },
+        {
+          "symbol": "BILL",
+          "value": 97,
+          "shares": 2
+        }
       ],
       "notes": [
         "90% cash drag",
