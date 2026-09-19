@@ -1,0 +1,363 @@
+.finguard-shell {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background:
+    radial-gradient(1200px 500px at 10% -10%, #c8ebe0 0%, transparent 55%),
+    radial-gradient(900px 420px at 100% 0%, #dce8e4 0%, transparent 50%),
+    #f3f6f4;
+  color: #12201c;
+}
+
+.finguard-banner {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem 2rem;
+  padding: 1.1rem 1.5rem 0.9rem;
+  border-bottom: 1px solid rgba(15, 92, 76, 0.14);
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(10px);
+}
+
+.finguard-eyebrow {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #3d6b5f;
+}
+
+.finguard-title {
+  margin: 0.15rem 0 0.25rem;
+  font-family: "Fraunces", Georgia, serif;
+  font-weight: 600;
+  font-size: clamp(1.75rem, 2.4vw, 2.35rem);
+  letter-spacing: -0.02em;
+  color: #0a4338;
+  line-height: 1.1;
+}
+
+.finguard-sub {
+  margin: 0;
+  max-width: 40rem;
+  font-size: 0.95rem;
+  line-height: 1.45;
+  color: #2f4a42;
+}
+
+.finguard-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.35rem;
+}
+
+.finguard-link {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: #0f5c4c;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(15, 92, 76, 0.35);
+}
+
+.finguard-session {
+  margin: 0;
+  font-size: 0.72rem;
+  color: #5a736b;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.finguard-demos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  padding: 0.75rem 1.25rem 0.25rem;
+}
+
+.finguard-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(280px, 340px) 1fr;
+  gap: 0;
+}
+
+.finguard-main {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.desk {
+  border-right: 1px solid rgba(15, 92, 76, 0.14);
+  background: rgba(255, 255, 255, 0.72);
+  overflow: auto;
+  padding: 0.85rem 0.9rem 1.2rem;
+}
+
+.desk-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.desk-head h2 {
+  margin: 0;
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 1.15rem;
+  color: #0a4338;
+}
+
+.desk-head span,
+.desk-loading,
+.desk-error,
+.muted {
+  font-size: 0.72rem;
+  color: #5a736b;
+}
+
+.desk-error {
+  color: #8b1e1e;
+}
+
+.desk-panel {
+  margin-bottom: 1rem;
+}
+
+.desk-panel h3 {
+  margin: 0 0 0.4rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #3d6b5f;
+}
+
+.desk-panel ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.desk-panel li {
+  padding: 0.55rem 0.6rem;
+  border: 1px solid rgba(15, 92, 76, 0.12);
+  background: #fff;
+  border-radius: 8px;
+}
+
+.desk-panel strong {
+  display: block;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  color: #12201c;
+}
+
+.desk-panel strong[data-sentiment="bearish"],
+.desk-panel strong[data-priority="high"] {
+  color: #8b1e1e;
+}
+
+.desk-panel strong[data-sentiment="bullish"] {
+  color: #0f5c4c;
+}
+
+.desk-panel span {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.7rem;
+  color: #5a736b;
+}
+
+.desk-panel p {
+  margin: 0.35rem 0 0;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: #2f4a42;
+}
+
+@media (max-width: 960px) {
+  .finguard-body {
+    grid-template-columns: 1fr;
+  }
+
+  .desk {
+    border-right: none;
+    border-bottom: 1px solid rgba(15, 92, 76, 0.14);
+    max-height: 280px;
+  }
+}
+
+
+.finguard-demo {
+  font: inherit;
+  font-size: 0.8rem;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid rgba(15, 92, 76, 0.22);
+  background: rgba(255, 255, 255, 0.85);
+  color: #0f5c4c;
+  cursor: pointer;
+}
+
+.finguard-demo:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.finguard-demo:not(:disabled):hover {
+  background: #e7f5f0;
+}
+
+.finguard-chat {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 1rem 1.25rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.finguard-empty {
+  margin: auto;
+  color: #5a736b;
+  font-size: 0.95rem;
+}
+
+.bubble {
+  max-width: min(720px, 92%);
+  padding: 0.85rem 1rem;
+  border-radius: 12px;
+  white-space: pre-wrap;
+  line-height: 1.45;
+  font-size: 0.95rem;
+}
+
+.bubble.user {
+  align-self: flex-end;
+  background: #0f5c4c;
+  color: #f4faf7;
+}
+
+.bubble.assistant {
+  align-self: flex-start;
+  background: #fff;
+  border: 1px solid rgba(15, 92, 76, 0.12);
+  box-shadow: 0 8px 20px rgba(10, 67, 56, 0.05);
+}
+
+.bubble.tool,
+.bubble.approval {
+  align-self: flex-start;
+  background: #eef7f3;
+  border: 1px solid rgba(15, 92, 76, 0.18);
+  font-size: 0.86rem;
+}
+
+.bubble.tool pre,
+.bubble.approval pre {
+  margin: 0.45rem 0 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.75rem;
+  color: #2f4a42;
+}
+
+.approval-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 0.65rem;
+}
+
+.approval-actions button {
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 0.35rem 0.8rem;
+  border: none;
+  background: #0f5c4c;
+  color: #f4faf7;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.approval-actions button.deny {
+  background: #8b1e1e;
+}
+
+.approval-actions button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.resolved {
+  font-size: 0.78rem;
+  color: #3d6b5f;
+}
+
+.bubble.status {
+  align-self: center;
+  background: transparent;
+  color: #5a736b;
+  font-size: 0.8rem;
+  padding: 0.2rem;
+}
+
+.bubble.error {
+  align-self: stretch;
+  background: #fde8e6;
+  color: #8b1e1e;
+  border: 1px solid #f0b8b2;
+}
+
+.finguard-composer {
+  display: flex;
+  gap: 0.55rem;
+  padding: 0.85rem 1.25rem 1.15rem;
+  border-top: 1px solid rgba(15, 92, 76, 0.12);
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.finguard-composer input {
+  flex: 1;
+  font: inherit;
+  font-size: 0.95rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid rgba(15, 92, 76, 0.22);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.finguard-composer button {
+  font: inherit;
+  font-weight: 600;
+  padding: 0.75rem 1.1rem;
+  border: none;
+  border-radius: 10px;
+  background: #0f5c4c;
+  color: #f4faf7;
+  cursor: pointer;
+}
+
+.finguard-composer button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+@media (max-width: 720px) {
+  .finguard-banner {
+    padding: 0.9rem 1rem;
+  }
+
+  .finguard-actions {
+    align-items: flex-start;
+  }
+}

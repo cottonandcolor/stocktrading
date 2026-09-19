@@ -4,6 +4,17 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
 import * as z from "zod/v4";
 import { audit, auditPath, readAudit } from "./audit.js";
+import {
+  completeTask,
+  createTask,
+  dashboardSnapshot,
+  draftSlackMessage,
+  listAppointments,
+  listNews,
+  listSlackDrafts,
+  listTasks,
+  scheduleAppointment,
+} from "./desk.js";
 import { evaluatePolicy, formatBlockBanner } from "./policy.js";
 import {
   defaultCustomerId,
@@ -534,6 +545,171 @@ function buildServer() {
     }
   );
 
+  server.registerTool(
+    "get_advisor_dashboard",
+    {
+      description:
+        "Financial advisor desk snapshot: market news, open tasks, upcoming appointments, and Slack message queue.",
+      inputSchema: {},
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async () => {
+      const snapshot = dashboardSnapshot();
+      audit({
+        agent: "AdvisorAgent",
+        action: "get_advisor_dashboard",
+        decision: "INFO",
+      });
+      return text(snapshot);
+    }
+  );
+
+  server.registerTool(
+    "list_market_news",
+    {
+      description: "List curated (demo) market news relevant to client portfolios.",
+      inputSchema: {},
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async () => text({ news: listNews() })
+  );
+
+  server.registerTool(
+    "list_advisor_tasks",
+    {
+      description: "List advisor follow-up tasks (open or all).",
+      inputSchema: {
+        status: z.enum(["open", "done"]).optional(),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async ({ status }) => text({ tasks: listTasks(status) })
+  );
+
+  server.registerTool(
+    "create_advisor_task",
+    {
+      description: "Create an advisor follow-up task on the desk.",
+      inputSchema: {
+        title: z.string(),
+        due: z.string().describe("ISO timestamp"),
+        priority: z.enum(["high", "medium", "low"]).optional(),
+        related_customer_id: z.string().optional(),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      const task = createTask(input);
+      audit({
+        agent: "AdvisorAgent",
+        action: "create_advisor_task",
+        decision: "ALLOW",
+        detail: { task_id: task.id },
+      });
+      return text({ task });
+    }
+  );
+
+  server.registerTool(
+    "complete_advisor_task",
+    {
+      description: "Mark an advisor task done.",
+      inputSchema: { task_id: z.string() },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async ({ task_id }) => {
+      const task = completeTask(task_id);
+      if (!task) return blocked({ error: `Unknown task ${task_id}` });
+      audit({
+        agent: "AdvisorAgent",
+        action: "complete_advisor_task",
+        decision: "ALLOW",
+        detail: { task_id },
+      });
+      return text({ task });
+    }
+  );
+
+  server.registerTool(
+    "list_appointments",
+    {
+      description: "List upcoming client/compliance appointments.",
+      inputSchema: {},
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async () => text({ appointments: listAppointments() })
+  );
+
+  server.registerTool(
+    "schedule_appointment",
+    {
+      description: "Schedule a client or internal appointment on the advisor calendar.",
+      inputSchema: {
+        title: z.string(),
+        with_whom: z.string(),
+        start: z.string(),
+        end: z.string(),
+        channel: z.enum(["zoom", "phone", "in_person", "slack"]).optional(),
+        notes: z.string().optional(),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      const appointment = scheduleAppointment(input);
+      audit({
+        agent: "AdvisorAgent",
+        action: "schedule_appointment",
+        decision: "ALLOW",
+        detail: { appointment_id: appointment.id },
+      });
+      return text({ appointment });
+    }
+  );
+
+  server.registerTool(
+    "queue_slack_update",
+    {
+      description:
+        "Queue a Slack message for the advisory team (e.g. KYC block alert or recommendation summary). After approval, use the Slack MCP connector to actually post it.",
+      inputSchema: {
+        channel: z
+          .string()
+          .describe("Slack channel name or ID, e.g. #finguard-alerts"),
+        text: z.string(),
+        related: z.string().optional().describe("customer id or ticket id"),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        openWorldHint: true,
+      },
+    },
+    async (input) => {
+      const draft = draftSlackMessage(input);
+      audit({
+        agent: "AdvisorAgent",
+        action: "queue_slack_update",
+        decision: "APPROVAL_REQUIRED",
+        detail: { draft_id: draft.id, channel: draft.channel },
+      });
+      return text({
+        draft,
+        next_step:
+          "If Slack MCP is connected in TrueForge, post this exact text to the channel. Otherwise leave queued for the desk dashboard.",
+      });
+    }
+  );
+
+  server.registerTool(
+    "list_slack_queue",
+    {
+      description: "List queued Slack drafts awaiting post via Slack MCP.",
+      inputSchema: { limit: z.number().int().positive().max(50).optional() },
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async ({ limit }) => text({ drafts: listSlackDrafts(limit || 20) })
+  );
+
   return server;
 }
 
@@ -541,6 +717,10 @@ const app = createMcpExpressApp();
 
 app.get("/health", (_req, res) => {
   res.json({ ok: true, service: "finguard", mcp: `http://127.0.0.1:${PORT}/mcp` });
+});
+
+app.get("/dashboard", (_req, res) => {
+  res.json({ data: dashboardSnapshot() });
 });
 
 app.post("/mcp", async (req, res) => {

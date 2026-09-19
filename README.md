@@ -2,7 +2,10 @@
 
 ## Agent Harness Hackathon (FinGuard)
 
-KYC-aware financial advisor on TrueForge: see [`HACKATHON.md`](HACKATHON.md) and [`finguard/`](finguard/).
+KYC-aware financial advisor on TrueForge: see [`HACKATHON.md`](HACKATHON.md).
+
+- MCP tools: [`finguard/`](finguard/)
+- Branded chat UI (TrueForge UI SDK): [`finguard-ui/`](finguard-ui/) → `npm run dev` → http://localhost:5173
 
 Takes a starting capital of $25,000 and backtests several well-known systematic
 strategies against buy-and-hold SPY, using real historical data from Yahoo Finance.

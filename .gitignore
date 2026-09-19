@@ -9,6 +9,9 @@ paper_platform.db
 results.png
 finguard/node_modules/
 finguard/dist/
+finguard/data/desk.json
+finguard-ui/node_modules/
+finguard-ui/dist/
 logs/
 .DS_Store
 *.pem
