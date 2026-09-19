@@ -1,0 +1,762 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FinGuard · Demo slides</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,500;6..72,600&family=Public+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --ink: #121c19;
+        --ink-soft: #3a4742;
+        --muted: #6a7771;
+        --brand: #0a4d42;
+        --brand-mid: #0e6a5a;
+        --brand-deep: #06352e;
+        --brand-wash: #e6f0ec;
+        --brass: #9a7b4f;
+        --brass-soft: #f4eee4;
+        --paper: #eef1ee;
+        --surface: #fbfcfb;
+        --line: rgba(18, 28, 25, 0.12);
+        --danger: #9e3a3a;
+        --font-display: "Newsreader", Georgia, serif;
+        --font-body: "Public Sans", "Segoe UI", sans-serif;
+        --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        font-family: var(--font-body);
+        color: var(--ink);
+        background: var(--paper);
+      }
+
+      .deck {
+        height: 100%;
+        position: relative;
+        overflow: hidden;
+        background:
+          linear-gradient(
+            180deg,
+            var(--paper) 0%,
+            color-mix(in srgb, var(--brand-wash) 50%, var(--paper)) 45%,
+            var(--paper) 100%
+          );
+      }
+
+      .slide {
+        position: absolute;
+        inset: 0;
+        display: none;
+        flex-direction: column;
+        justify-content: center;
+        padding: clamp(2rem, 5vw, 4rem) clamp(2rem, 6vw, 5rem);
+        opacity: 0;
+      }
+
+      .slide.active {
+        display: flex;
+        opacity: 1;
+        animation: fade 0.28s ease;
+      }
+
+      @keyframes fade {
+        from {
+          opacity: 0;
+          transform: translateY(8px);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+
+      .eyebrow {
+        margin: 0 0 0.75rem;
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--brass);
+      }
+
+      h1 {
+        margin: 0 0 0.75rem;
+        font-family: var(--font-display);
+        font-weight: 600;
+        font-size: clamp(2.2rem, 4.5vw, 3.4rem);
+        letter-spacing: -0.03em;
+        color: var(--brand-deep);
+        line-height: 1.1;
+        max-width: 18ch;
+      }
+
+      h2 {
+        margin: 0 0 1.25rem;
+        font-family: var(--font-display);
+        font-weight: 600;
+        font-size: clamp(1.7rem, 3vw, 2.4rem);
+        letter-spacing: -0.02em;
+        color: var(--brand-deep);
+        line-height: 1.15;
+      }
+
+      .lede {
+        margin: 0;
+        max-width: 42rem;
+        font-size: clamp(1.05rem, 1.6vw, 1.25rem);
+        line-height: 1.55;
+        color: var(--ink-soft);
+      }
+
+      .brand-row {
+        display: flex;
+        align-items: center;
+        gap: 0.85rem;
+        margin-bottom: 1.5rem;
+      }
+
+      .mark {
+        width: 44px;
+        height: 44px;
+        border-radius: 8px;
+        display: grid;
+        place-items: center;
+        color: #eef7f4;
+        background: linear-gradient(160deg, var(--brand-mid), var(--brand-deep));
+      }
+
+      .mark svg {
+        width: 24px;
+        height: 24px;
+      }
+
+      .grid-2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1.25rem;
+        margin-top: 1.5rem;
+        max-width: 56rem;
+      }
+
+      .grid-3 {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+        margin-top: 1.35rem;
+        max-width: 58rem;
+      }
+
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-left: 3px solid var(--brand);
+        padding: 1rem 1.15rem;
+      }
+
+      .card.brass {
+        border-left-color: var(--brass);
+        background: color-mix(in srgb, var(--brass-soft) 55%, white);
+      }
+
+      .card h3 {
+        margin: 0 0 0.4rem;
+        font-size: 0.95rem;
+        color: var(--brand-deep);
+      }
+
+      .card p,
+      .card li {
+        margin: 0;
+        font-size: 0.88rem;
+        line-height: 1.45;
+        color: var(--ink-soft);
+      }
+
+      .card ul {
+        margin: 0.35rem 0 0;
+        padding-left: 1.1rem;
+      }
+
+      .mono {
+        font-family: var(--font-mono);
+        font-size: 0.78rem;
+        color: var(--brand);
+      }
+
+      .flow {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.45rem;
+        margin-top: 1.5rem;
+        max-width: 58rem;
+      }
+
+      .pill {
+        font-size: 0.82rem;
+        font-weight: 600;
+        padding: 0.45rem 0.7rem;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        color: var(--brand-deep);
+      }
+
+      .pill.gate {
+        background: var(--brass-soft);
+        border-color: rgba(154, 123, 79, 0.4);
+        color: #6d542e;
+      }
+
+      .arrow {
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      .agents {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.75rem;
+        margin-top: 1.25rem;
+        max-width: 58rem;
+      }
+
+      .agent {
+        padding: 0.85rem 0.95rem;
+        background: var(--surface);
+        border: 1px solid var(--line);
+      }
+
+      .agent strong {
+        display: block;
+        font-size: 0.88rem;
+        color: var(--brand-deep);
+        margin-bottom: 0.25rem;
+      }
+
+      .agent span {
+        font-size: 0.78rem;
+        color: var(--ink-soft);
+        line-height: 1.4;
+      }
+
+      .agent .tools {
+        margin-top: 0.45rem;
+        font-family: var(--font-mono);
+        font-size: 0.68rem;
+        color: var(--muted);
+        line-height: 1.35;
+      }
+
+      .arch {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr auto 1fr;
+        gap: 0.75rem;
+        align-items: stretch;
+        margin-top: 1.5rem;
+        max-width: 58rem;
+      }
+
+      .arch-box {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        padding: 1rem;
+      }
+
+      .arch-box h3 {
+        margin: 0 0 0.5rem;
+        font-size: 0.95rem;
+        color: var(--brand-deep);
+      }
+
+      .arch-box ul {
+        margin: 0;
+        padding-left: 1rem;
+        font-size: 0.82rem;
+        color: var(--ink-soft);
+        line-height: 1.45;
+      }
+
+      .arch-mid {
+        display: grid;
+        place-items: center;
+        color: var(--brass);
+        font-weight: 700;
+        font-size: 0.85rem;
+      }
+
+      .steps {
+        counter-reset: step;
+        list-style: none;
+        margin: 1.25rem 0 0;
+        padding: 0;
+        max-width: 48rem;
+      }
+
+      .steps li {
+        position: relative;
+        padding: 0.75rem 0 0.75rem 3rem;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .steps li::before {
+        counter-increment: step;
+        content: counter(step);
+        position: absolute;
+        left: 0;
+        top: 0.75rem;
+        width: 1.7rem;
+        height: 1.7rem;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        font-family: var(--font-mono);
+        font-size: 0.75rem;
+        background: var(--brand);
+        color: #f3faf7;
+      }
+
+      .steps strong {
+        display: block;
+        color: var(--brand-deep);
+        margin-bottom: 0.2rem;
+      }
+
+      .steps span {
+        font-size: 0.88rem;
+        color: var(--ink-soft);
+      }
+
+      .footer-bar {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 0.85rem clamp(2rem, 6vw, 5rem);
+        border-top: 1px solid var(--line);
+        background: color-mix(in srgb, var(--surface) 90%, transparent);
+        backdrop-filter: blur(8px);
+        font-size: 0.75rem;
+        color: var(--muted);
+      }
+
+      .progress {
+        display: flex;
+        gap: 0.35rem;
+        align-items: center;
+      }
+
+      .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: rgba(10, 77, 66, 0.2);
+      }
+
+      .dot.on {
+        background: var(--brand);
+      }
+
+      .hint kbd {
+        font-family: var(--font-mono);
+        font-size: 0.7rem;
+        padding: 0.1rem 0.35rem;
+        border: 1px solid var(--line);
+        background: var(--surface);
+      }
+
+      .callout {
+        margin-top: 1.25rem;
+        max-width: 42rem;
+        padding: 0.85rem 1rem;
+        background: var(--brass-soft);
+        border: 1px solid rgba(154, 123, 79, 0.35);
+        border-left: 3px solid var(--brass);
+        font-size: 0.95rem;
+        color: var(--ink-soft);
+        line-height: 1.45;
+      }
+
+      @media (max-width: 900px) {
+        .grid-2,
+        .grid-3,
+        .agents,
+        .arch {
+          grid-template-columns: 1fr;
+        }
+
+        .arch-mid {
+          transform: rotate(90deg);
+          padding: 0.25rem 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="deck" id="deck">
+      <!-- 0 -->
+      <section class="slide active" data-title="Title">
+        <div class="brand-row">
+          <div class="mark" aria-hidden="true">
+            <svg viewBox="0 0 64 64" fill="none">
+              <path
+                d="M32 12c8.5 4.2 14 5.4 14 12.8v12.4c0 9.2-6.2 15.6-14 18.8-7.8-3.2-14-9.6-14-18.8V24.8C18 17.4 23.5 16.2 32 12z"
+                stroke="currentColor"
+                stroke-width="3.2"
+                stroke-linejoin="round"
+              />
+              <path
+                d="M24.5 32.5l5.2 5.2 10.3-11"
+                stroke="currentColor"
+                stroke-width="3.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </div>
+          <p class="eyebrow" style="margin: 0">TrueForge hackathon</p>
+        </div>
+        <h1>FinGuard</h1>
+        <p class="lede">
+          KYC-gated financial advice on TrueForge — one supervisor agent, role-based
+          MCP tools, human approvals, live Yahoo market data.
+        </p>
+        <div class="flow">
+          <span class="pill">TrueForge harness</span>
+          <span class="arrow">→</span>
+          <span class="pill">FinGuard MCP</span>
+          <span class="arrow">→</span>
+          <span class="pill">SQLite SoR + Yahoo</span>
+          <span class="arrow">→</span>
+          <span class="pill gate">Human Allow / Deny</span>
+        </div>
+      </section>
+
+      <!-- 1 -->
+      <section class="slide" data-title="Problem">
+        <p class="eyebrow">The story</p>
+        <h2>Advisor day, with guardrails</h2>
+        <p class="lede">
+          Open Jane’s book → clear KYC → research markets → recommend → approve →
+          act. If KYC expires mid-flow, advice blocks and NotificationAgent remediates.
+        </p>
+        <ol class="steps">
+          <li>
+            <strong>Brief</strong>
+            <span>Desk + KYC status via MCP</span>
+          </li>
+          <li>
+            <strong>Compliance fork</strong>
+            <span>Expire path → email form + Slack + task</span>
+          </li>
+          <li>
+            <strong>Research → Advise → Act</strong>
+            <span>Yahoo live data, plan, paper trade, appointment</span>
+          </li>
+        </ol>
+      </section>
+
+      <!-- 2 -->
+      <section class="slide" data-title="Architecture">
+        <p class="eyebrow">Architecture</p>
+        <h2>What TrueForge owns vs MCP</h2>
+        <div class="arch">
+          <div class="arch-box">
+            <h3>TrueForge (:8790)</h3>
+            <ul>
+              <li>Sessions & turns</li>
+              <li>Streaming agent events</li>
+              <li>Tool-call approvals</li>
+              <li>Agent instructions</li>
+              <li>MCP connector wiring</li>
+            </ul>
+          </div>
+          <div class="arch-mid">MCP</div>
+          <div class="arch-box">
+            <h3>FinGuard MCP (:8765)</h3>
+            <ul>
+              <li>KYC / portfolio SoR</li>
+              <li>Advisor desk state</li>
+              <li>Notify + Slack queue</li>
+              <li>Audit log</li>
+              <li>Yahoo quotes & TA</li>
+            </ul>
+          </div>
+          <div class="arch-mid">UI</div>
+          <div class="arch-box">
+            <h3>FinGuard UI (:5173)</h3>
+            <ul>
+              <li>Advisor day path</li>
+              <li>Live desk dashboard</li>
+              <li>Sticky Allow / Deny</li>
+              <li>Demo narrative controls</li>
+            </ul>
+          </div>
+        </div>
+        <div class="callout">
+          Rule of thumb: <strong>TrueForge orchestrates</strong>;
+          <strong>MCP is the system of record</strong> for client and market facts.
+        </div>
+      </section>
+
+      <!-- 3 -->
+      <section class="slide" data-title="Agents">
+        <p class="eyebrow">Coordination</p>
+        <h2>One agent, role-based tools</h2>
+        <p class="lede">
+          TrueForge runs <span class="mono">finguard-kyc-advisor</span>. “Sub-agents”
+          are roles stamped on MCP tool calls + audit — the supervisor routes work by
+          calling the right tools in order.
+        </p>
+        <div class="agents">
+          <div class="agent">
+            <strong>KycAgent</strong>
+            <span>Identity & suitability gate</span>
+            <div class="tools">check_kyc_status · simulate_kyc_*</div>
+          </div>
+          <div class="agent">
+            <strong>DeskAgent</strong>
+            <span>News, tasks, appointments</span>
+            <div class="tools">get_advisor_dashboard · create_advisor_task</div>
+          </div>
+          <div class="agent">
+            <strong>MarketData</strong>
+            <span>Live Yahoo Finance</span>
+            <div class="tools">yahoo_quote · yahoo_technical_analysis</div>
+          </div>
+          <div class="agent">
+            <strong>AdvisorAgent</strong>
+            <span>Portfolio & recommendations</span>
+            <div class="tools">analyze_portfolio · generate_recommendation</div>
+          </div>
+          <div class="agent">
+            <strong>ComplianceAgent</strong>
+            <span>Policy + paper actions</span>
+            <div class="tools">run_compliance_check · propose_paper_action</div>
+          </div>
+          <div class="agent">
+            <strong>NotificationAgent</strong>
+            <span>Client email + Slack queue</span>
+            <div class="tools">notify_kyc_expired · queue_slack_update</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 4 -->
+      <section class="slide" data-title="Happy path">
+        <p class="eyebrow">Happy path tools</p>
+        <h2>Brief → Research → Advise</h2>
+        <div class="grid-2">
+          <div class="card">
+            <h3>1 · Brief</h3>
+            <ul>
+              <li><span class="mono">get_advisor_dashboard</span></li>
+              <li><span class="mono">check_kyc_status</span></li>
+            </ul>
+            <p style="margin-top: 0.55rem">
+              DeskAgent + KycAgent — “is Jane clear to advise?”
+            </p>
+          </div>
+          <div class="card">
+            <h3>3 · Research</h3>
+            <ul>
+              <li><span class="mono">yahoo_quote / yahoo_quotes</span></li>
+              <li><span class="mono">get_market_snapshot</span></li>
+              <li><span class="mono">yahoo_technical_analysis</span></li>
+            </ul>
+            <p style="margin-top: 0.55rem">Live prices & indicators — never invented.</p>
+          </div>
+          <div class="card">
+            <h3>4 · Advise</h3>
+            <ul>
+              <li><span class="mono">analyze_portfolio</span></li>
+              <li><span class="mono">generate_recommendation</span></li>
+              <li><span class="mono">queue_slack_update</span></li>
+            </ul>
+            <p style="margin-top: 0.55rem">Blocked unless KYC = VERIFIED.</p>
+          </div>
+          <div class="card brass">
+            <h3>Approval gate</h3>
+            <p>
+              TrueForge pauses write tools. UI sticky bar →
+              <strong>Allow all</strong> continues the turn.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 5 -->
+      <section class="slide" data-title="Compliance fork">
+        <p class="eyebrow">Coordination under failure</p>
+        <h2>When KYC expires mid-day</h2>
+        <div class="flow" style="margin-top: 0.5rem">
+          <span class="pill">KycAgent · simulate_kyc_expiration</span>
+          <span class="arrow">→</span>
+          <span class="pill">AdvisorAgent · recommend → BLOCK</span>
+          <span class="arrow">→</span>
+          <span class="pill">NotificationAgent · notify_kyc_expired</span>
+          <span class="arrow">→</span>
+          <span class="pill">DeskAgent · task + Slack</span>
+        </div>
+        <div class="grid-2" style="margin-top: 1.5rem">
+          <div class="card">
+            <h3>What the UI shows</h3>
+            <ul>
+              <li>Day path jumps to <strong>Compliance</strong></li>
+              <li>Advise / Act visually blocked</li>
+              <li>Client notify + form link appear on desk</li>
+            </ul>
+          </div>
+          <div class="card brass">
+            <h3>Why it matters</h3>
+            <p>
+              Agents don’t improvise past policy — MCP returns ACTION BLOCKED, then
+              NotificationAgent remediates with a renewal form (demo SMTP).
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 6 -->
+      <section class="slide" data-title="Act">
+        <p class="eyebrow">Close the day</p>
+        <h2>Act — restore, trade, follow up</h2>
+        <div class="grid-3">
+          <div class="card">
+            <h3>Restore</h3>
+            <p class="mono">simulate_kyc_verified</p>
+            <p style="margin-top: 0.45rem">Closes remediation tasks on the desk.</p>
+          </div>
+          <div class="card">
+            <h3>Paper trade</h3>
+            <p class="mono">propose_paper_action</p>
+            <p style="margin-top: 0.45rem">
+              Destructive tool → TrueForge approval → simulated fill (no broker).
+            </p>
+          </div>
+          <div class="card">
+            <h3>Follow up</h3>
+            <p class="mono">schedule_appointment</p>
+            <p style="margin-top: 0.45rem">Zoom quarterly review on the desk.</p>
+          </div>
+        </div>
+        <div class="callout">
+          Observability: after sensitive steps, supervisor calls
+          <span class="mono">get_audit_log</span> — every role leaves a trail.
+        </div>
+      </section>
+
+      <!-- 7 -->
+      <section class="slide" data-title="Data">
+        <p class="eyebrow">What’s real</p>
+        <h2>Mock vs live in one glance</h2>
+        <div class="grid-2">
+          <div class="card">
+            <h3>Live / persistent</h3>
+            <ul>
+              <li>Yahoo quotes & technical analysis</li>
+              <li>FinGuard SQLite (KYC, desk, audit)</li>
+              <li>TrueForge sessions & approvals</li>
+              <li>MCP tool invocations (real)</li>
+            </ul>
+          </div>
+          <div class="card brass">
+            <h3>Demo side effects</h3>
+            <ul>
+              <li>Email: queued / approved_sent_demo</li>
+              <li>Slack: queued_for_slack_mcp</li>
+              <li>Paper trades: no live broker</li>
+              <li>Market news: curated wire</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- 8 -->
+      <section class="slide" data-title="Close">
+        <p class="eyebrow">Takeaway</p>
+        <h2>TrueForge + MCP + human gate</h2>
+        <p class="lede">
+          One supervisor agent coordinates KYC, desk, markets, advice, notify, and
+          compliance through FinGuard MCP — with TrueForge pausing writes until a
+          human Allows.
+        </p>
+        <div class="flow">
+          <span class="pill">Open client</span>
+          <span class="arrow">→</span>
+          <span class="pill">Clear KYC</span>
+          <span class="arrow">→</span>
+          <span class="pill">Advise</span>
+          <span class="arrow">→</span>
+          <span class="pill gate">Approve</span>
+          <span class="arrow">→</span>
+          <span class="pill">Act</span>
+        </div>
+        <div class="callout">
+          Live UI: <span class="mono">http://127.0.0.1:5173</span> · slides:
+          <span class="mono">/demo-slides.html</span>
+        </div>
+      </section>
+
+      <div class="footer-bar">
+        <span>FinGuard · TrueForge + MCP</span>
+        <div class="progress" id="dots" aria-hidden="true"></div>
+        <span class="hint"><kbd>←</kbd> <kbd>→</kbd> or click</span>
+      </div>
+    </div>
+
+    <script>
+      const slides = [...document.querySelectorAll(".slide")];
+      const dots = document.getElementById("dots");
+      let i = 0;
+
+      slides.forEach((_, idx) => {
+        const d = document.createElement("span");
+        d.className = "dot" + (idx === 0 ? " on" : "");
+        dots.appendChild(d);
+      });
+
+      function show(n) {
+        i = (n + slides.length) % slides.length;
+        slides.forEach((s, idx) => s.classList.toggle("active", idx === i));
+        [...dots.children].forEach((d, idx) =>
+          d.classList.toggle("on", idx === i)
+        );
+        document.title = `FinGuard · ${slides[i].dataset.title}`;
+      }
+
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "ArrowRight" || e.key === " " || e.key === "PageDown") {
+          e.preventDefault();
+          show(i + 1);
+        } else if (e.key === "ArrowLeft" || e.key === "PageUp") {
+          e.preventDefault();
+          show(i - 1);
+        } else if (e.key === "Home") show(0);
+        else if (e.key === "End") show(slides.length - 1);
+      });
+
+      document.getElementById("deck").addEventListener("click", (e) => {
+        if (e.target.closest("a, button, kbd")) return;
+        const mid = window.innerWidth / 2;
+        show(e.clientX < mid ? i - 1 : i + 1);
+      });
+    </script>
+  </body>
+</html>

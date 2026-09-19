@@ -1,9 +1,13 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { getDb } from "./db.js";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const AUDIT_PATH = path.join(ROOT, "logs", "finguard_audit.jsonl");
+const LEGACY_AUDIT = path.join(
+  path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.."),
+  "logs",
+  "finguard_audit.jsonl"
+);
 
 export type AuditEvent = {
   ts: string;
@@ -20,17 +24,31 @@ export function audit(event: Omit<AuditEvent, "ts">): AuditEvent {
     ts: new Date().toISOString(),
     ...event,
   };
-  fs.mkdirSync(path.dirname(AUDIT_PATH), { recursive: true });
-  fs.appendFileSync(AUDIT_PATH, JSON.stringify(full) + "\n");
+  getDb()
+    .prepare("INSERT INTO audit_events (ts, payload) VALUES (?, ?)")
+    .run(full.ts, JSON.stringify(full));
   return full;
 }
 
 export function readAudit(limit = 40): AuditEvent[] {
-  if (!fs.existsSync(AUDIT_PATH)) return [];
-  const lines = fs.readFileSync(AUDIT_PATH, "utf8").trim().split("\n").filter(Boolean);
+  const rows = getDb()
+    .prepare(
+      "SELECT payload FROM audit_events ORDER BY id DESC LIMIT ?"
+    )
+    .all(limit) as Array<{ payload: string }>;
+  if (rows.length) {
+    return rows.map((r) => JSON.parse(r.payload) as AuditEvent).reverse();
+  }
+  // One-time fallback for older JSONL demos
+  if (!fs.existsSync(LEGACY_AUDIT)) return [];
+  const lines = fs
+    .readFileSync(LEGACY_AUDIT, "utf8")
+    .trim()
+    .split("\n")
+    .filter(Boolean);
   return lines.slice(-limit).map((line) => JSON.parse(line) as AuditEvent);
 }
 
 export function auditPath(): string {
-  return AUDIT_PATH;
+  return `sqlite:${process.env.FINGUARD_DB_PATH || "finguard/data/finguard.sqlite"}#audit_events`;
 }

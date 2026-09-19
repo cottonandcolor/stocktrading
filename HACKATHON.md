@@ -29,9 +29,9 @@ Official welcome / logistics: [hackathon welcome deck](https://truefoundry-hacka
 ### Demo script to record (~3 min)
 
 1. FinGuard UI (`localhost:5173`) — Verified recommendation for Jane.  
-2. Expire KYC → same ask → **ACTION BLOCKED**.  
+2. Expire KYC → same ask → **ACTION BLOCKED** → Allow `notify_kyc_expired` (email + form) → open form link.  
 3. Restore KYC → paper trade → **Allow** approval.  
-4. Show audit log / tool calls. Optionally flash stock TrueForge UI at `:8790`.
+4. Show audit log / tool calls / Client notify panel. Optionally flash stock TrueForge UI at `:8790`.
 
 ## What it demonstrates
 
@@ -40,7 +40,7 @@ Official welcome / logistics: [hackathon welcome deck](https://truefoundry-hacka
 | Observe | Tool calls in UI + JSONL audit (`get_audit_log`) |
 | Control | KYC policy engine + TrueForge approval on write tools |
 | Test | Same request → different outcomes (verified / incomplete / expired) |
-| Coordination | Supervisor agent + KYC / Advisor / Compliance tools |
+| Coordination | Supervisor + KYC / Advisor / Compliance / Notification / Desk tools |
 | Runtime | MCP allowlist; paper-only execution |
 
 ## Prerequisites
@@ -93,7 +93,12 @@ npm run start
 ```
 
 MCP URL: **`http://127.0.0.1:8765/mcp`**  
-Health: [http://127.0.0.1:8765/health](http://127.0.0.1:8765/health)
+Health: [http://127.0.0.1:8765/health](http://127.0.0.1:8765/health)  
+Data backend: [http://127.0.0.1:8765/data-backend](http://127.0.0.1:8765/data-backend)
+
+**Data split:** TrueForge (SQLite/Postgres) stores sessions & turns. FinGuard MCP uses `finguard/data/finguard.sqlite` for customers, desk, notifications, and TrueForge `session_id → customer_id` bindings. The branded UI binds each new session to Jane automatically via `POST /sessions/bind`.
+
+**Live market data:** Yahoo Finance via FinGuard MCP tools `yahoo_quote`, `yahoo_quotes`, `yahoo_history`, `yahoo_technical_analysis`, `get_market_snapshot`. HTTP: `GET /market/quote/AAPL`, `GET /market/snapshot`, `GET /market/technical/SPY`.
 
 ## 3. Connect the MCP in TrueForge
 
